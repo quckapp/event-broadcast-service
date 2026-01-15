@@ -10,7 +10,7 @@ defmodule EventBroadcastService.Application do
       # MongoDB connection
       {Mongo, [
         name: :mongo,
-        url: System.get_env("MONGODB_URL", "mongodb://localhost:27017/quckchat_events"),
+        url: System.get_env("MONGODB_URL", "mongodb://localhost:27017/quckapp_events"),
         pool_size: 10
       ]},
       # Redis connection for pub/sub
