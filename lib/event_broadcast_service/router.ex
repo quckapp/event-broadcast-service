@@ -4,10 +4,15 @@ defmodule EventBroadcastService.Router do
   """
   use Plug.Router
 
+  plug CORSPlug, origin: ["*"], methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   plug Plug.Logger
   plug :match
   plug Plug.Parsers, parsers: [:json], json_decoder: Jason
   plug :dispatch
+
+  # Forward swagger and OpenAPI routes
+  forward "/swagger", to: EventBroadcastService.SwaggerPlug
+  forward "/api/openapi", to: EventBroadcastService.SwaggerPlug
 
   # Health endpoints
   get "/health" do

@@ -1,0 +1,200 @@
+# ==============================================================================
+# Event Broadcast Service - Docker Compose Configuration
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # Event Broadcast Service
+  # ============================================================================
+  event-broadcast-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: event-broadcast-service
+    ports:
+      - "4007:4007"
+      - "4369:4369"
+    environment:
+      # Application configuration
+      - PORT=4007
+      - MIX_ENV=prod
+      - SECRET_KEY_BASE=${SECRET_KEY_BASE:-}
+
+      # MongoDB configuration
+      - MONGODB_URL=mongodb://mongodb:27017/quckapp_events
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_DATABASE=quckapp_events
+      - MONGODB_POOL_SIZE=10
+
+      # Redis configuration
+      - REDIS_URL=redis://redis:6379/5
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DATABASE=5
+
+      # Kafka configuration
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_HOST=kafka
+      - KAFKA_PORT=9092
+      - KAFKA_CONSUMER_GROUP=event-broadcast-service-group
+
+      # Service URLs
+      - AUTH_SERVICE_URL=http://auth-service:4001
+      - USER_SERVICE_URL=http://user-service:4002
+
+      # Logging
+      - LOG_LEVEL=info
+
+      # Erlang/Elixir configuration
+      - RELEASE_DISTRIBUTION=none
+      - ERL_FLAGS=+fnu
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - quckapp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # MongoDB
+  # ============================================================================
+  mongodb:
+    image: mongo:7.0
+    container_name: event-broadcast-mongodb
+    ports:
+      - "27020:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=quckapp_events
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - quckapp-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ============================================================================
+  # Redis
+  # ============================================================================
+  redis:
+    image: redis:7.2-alpine
+    container_name: event-broadcast-redis
+    ports:
+      - "6382:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - quckapp-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ============================================================================
+  # Zookeeper (required for Kafka)
+  # ============================================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: event-broadcast-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    networks:
+      - quckapp-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # ============================================================================
+  # Kafka
+  # ============================================================================
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: event-broadcast-kafka
+    ports:
+      - "9095:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9095
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    networks:
+      - quckapp-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  quckapp-network:
+    driver: bridge
+    name: quckapp-network
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+  redis_data:
+    driver: local
+  zookeeper_data:
+    driver: local
+  zookeeper_log:
+    driver: local
+  kafka_data:
+    driver: local
