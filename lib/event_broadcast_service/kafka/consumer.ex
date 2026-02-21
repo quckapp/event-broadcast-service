@@ -1,52 +1,63 @@
 defmodule EventBroadcastService.Kafka.Consumer do
-  @moduledoc """
-  Kafka consumer for incoming events from other services
-  """
-  use GenServer
+  @moduledoc "Kafka consumer for incoming events from other services"
+  @behaviour :brod_group_subscriber
   require Logger
 
   @topic "events.incoming"
 
   def start_link(_opts) do
-    GenServer.start_link(__MODULE__, [], name: __MODULE__)
-  end
-
-  @impl true
-  def init(_) do
-    # In production, connect to Kafka
     kafka_hosts = get_kafka_hosts()
     group_id = "event-broadcast-service"
 
     Logger.info("Kafka Consumer starting for topic: #{@topic}")
 
-    # Start consuming in a separate process
-    spawn_link(fn -> start_consumer(kafka_hosts, group_id) end)
+    group_config = [
+      offset_commit_policy: :commit_to_kafka_v2,
+      offset_commit_interval_seconds: 5
+    ]
 
-    {:ok, %{}}
-  end
-
-  defp start_consumer(hosts, group_id) do
-    case :brod.start_link_group_subscriber(
-           :event_broadcast_client,
-           group_id,
-           [@topic],
-           _group_config = [offset_commit_policy: :commit_to_kafka_v2],
-           _consumer_config = [begin_offset: :latest],
-           __MODULE__,
-           []
-         ) do
-      {:ok, _pid} ->
-        Logger.info("Kafka consumer started successfully")
-
+    case :brod.start_client(kafka_hosts, :event_broadcast_client, _client_config = []) do
+      :ok -> :ok
+      {:error, {:already_started, _}} -> :ok
       {:error, reason} ->
-        Logger.warning("Failed to start Kafka consumer: #{inspect(reason)}")
+        Logger.warning("Kafka client failed to start: #{inspect(reason)}")
+        :ignore
+    end
+    |> case do
+      :ok ->
+        :brod.start_link_group_subscriber(
+          :event_broadcast_client,
+          group_id,
+          [@topic],
+          group_config,
+          _consumer_config = [begin_offset: :latest],
+          __MODULE__,
+          _cb_init_arg = []
+        )
+      :ignore -> :ignore
     end
   end
 
-  # Callback for brod group subscriber
+  def child_spec(opts) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [opts]},
+      type: :worker,
+      restart: :permanent
+    }
+  end
+
+  @impl :brod_group_subscriber
+  def init(_group_id, _cb_init_arg) do
+    Logger.info("Kafka consumer started successfully")
+    {:ok, %{}}
+  end
+
+  @impl :brod_group_subscriber
   def handle_message(_topic, _partition, message, state) do
     try do
-      event = message |> elem(4) |> Jason.decode!()
+      value = :brod.message_value(message)
+      event = Jason.decode!(value)
       process_event(event)
       {:ok, :ack, state}
     rescue
