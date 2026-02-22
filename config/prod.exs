@@ -1,11 +1,19 @@
+# =============================================================================
+# PROD Environment Configuration (Compile-time)
+# =============================================================================
+# This file contains compile-time configuration for production.
+# Runtime configuration is handled in config/runtime.exs
+# =============================================================================
+
 import Config
 
-config :event_broadcast_service,
-  mongodb_url: System.get_env("MONGODB_URL"),
-  redis_host: System.get_env("REDIS_HOST"),
-  redis_port: String.to_integer(System.get_env("REDIS_PORT") || "6379"),
-  kafka_host: System.get_env("KAFKA_HOST"),
-  kafka_port: String.to_integer(System.get_env("KAFKA_PORT") || "9092")
+# Use production logger level - runtime.exs can override this
+config :logger, level: :info
 
-config :logger,
-  level: :info
+# Compile-time settings for production
+config :event_broadcast_service,
+  env: :prod
+
+# Note: All runtime configuration (MongoDB, Redis, Kafka, etc.)
+# is handled in config/runtime.exs to allow Docker deployments
+# without requiring environment variables at compile time.

@@ -6,6 +6,9 @@ defmodule EventBroadcastService.Application do
 
   @impl true
   def start(_type, _args) do
+    # Initialize circuit breakers
+    EventBroadcastService.CircuitBreaker.init()
+
     children = [
       # MongoDB connection
       {Mongo, [
@@ -42,6 +45,6 @@ defmodule EventBroadcastService.Application do
   end
 
   defp port do
-    String.to_integer(System.get_env("PORT", "4006"))
+    String.to_integer(System.get_env("PORT", "4007"))
   end
 end
