@@ -12,7 +12,7 @@ defmodule EventBroadcastService.Router do
 
   # Forward swagger and OpenAPI routes
   forward "/swagger", to: EventBroadcastService.SwaggerPlug
-  forward "/api/openapi", to: EventBroadcastService.SwaggerPlug
+  forward "/api/v1/openapi", to: EventBroadcastService.SwaggerPlug
 
   # Health endpoints
   get "/health" do

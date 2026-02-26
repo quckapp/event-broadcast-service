@@ -2,7 +2,7 @@ defmodule EventBroadcastService.SwaggerPlug do
   @moduledoc """
   Plug for serving Swagger UI and OpenAPI specification.
 
-  This plug serves the Swagger UI at /swagger and the OpenAPI spec at /api/openapi.
+  This plug serves the Swagger UI at /swagger and the OpenAPI spec at /api/v1/openapi.
   Since this service uses Plug.Router instead of Phoenix, we need to handle
   the Swagger UI serving manually.
   """
@@ -11,12 +11,12 @@ defmodule EventBroadcastService.SwaggerPlug do
   plug :match
   plug :dispatch
 
-  # Root path handler - when forwarded from /swagger or /api/openapi
+  # Root path handler - when forwarded from /swagger or /api/v1/openapi
   # the path prefix is stripped, so we match on "/"
   get "/" do
     # Check the original request path to determine what to serve
     case conn.request_path do
-      "/api/openapi" ->
+      "/api/v1/openapi" ->
         serve_openapi_spec(conn)
 
       path when path in ["/swagger", "/swagger/"] ->
@@ -31,7 +31,7 @@ defmodule EventBroadcastService.SwaggerPlug do
   # Catch trailing slash
   get "" do
     case conn.request_path do
-      "/api/openapi" ->
+      "/api/v1/openapi" ->
         serve_openapi_spec(conn)
 
       _ ->
@@ -106,7 +106,7 @@ defmodule EventBroadcastService.SwaggerPlug do
       <script>
         window.onload = function() {
           const ui = SwaggerUIBundle({
-            url: "/api/openapi",
+            url: "/api/v1/openapi",
             dom_id: '#swagger-ui',
             deepLinking: true,
             presets: [
